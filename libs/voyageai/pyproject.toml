@@ -35,16 +35,12 @@ test = [
     "pytest-socket<1.0.0,>=0.7.0",
     "numpy<2.0.0,>=1.24.0; python_version < \"3.12\"",
     "numpy<2.0.0,>=1.26.0; python_version >= \"3.12\"",
-    "langchain-core",
 ]
 codespell = ["codespell<3.0.0,>=2.2.0"]
 test_integration = []
 lint = ["ruff<1.0.0,>=0.1.5"]
 dev = ["langchain-core"]
 typing = ["mypy<2.0,>=1.10", "langchain-core"]
-
-[tool.uv.sources]
-langchain-core = { path = "../../core", editable = true }
 
 [tool.mypy]
 disallow_untyped_defs = "True"
