@@ -53,12 +53,12 @@ def test_rerank_unit_test(mocker: Any) -> None:
         Document(
             page_content="Photosynthesis in plants converts light energy into "
             "glucose and produces essential oxygen.",
-            metadata={"relevance_score": 0.9},
+            metadata={"relevance_score": 0.9, "total_tokens": 255},
         ),
         Document(
             page_content="The Mediterranean diet emphasizes fish, olive oil, and "
             "vegetables, believed to reduce chronic diseases.",
-            metadata={"relevance_score": 0.8},
+            metadata={"relevance_score": 0.8, "total_tokens": 255},
         ),
     ]
 
