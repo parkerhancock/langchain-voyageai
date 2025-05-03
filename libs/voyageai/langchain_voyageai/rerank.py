@@ -114,15 +114,18 @@ class VoyageAIRerank(BaseDocumentCompressor):
 
         Returns:
             A sequence of compressed documents in relevance_score order.
+            Each document's metadata includes 'relevance_score' and 'total_tokens'.
         """
         if len(documents) == 0:
             return []
 
+        rerank_result = self._rerank(documents, query)
         compressed = []
-        for res in self._rerank(documents, query).results:
+        for res in rerank_result.results:
             doc = documents[res.index]
             doc_copy = Document(doc.page_content, metadata=deepcopy(doc.metadata))
             doc_copy.metadata["relevance_score"] = res.relevance_score
+            doc_copy.metadata["total_tokens"] = rerank_result.total_tokens
             compressed.append(doc_copy)
         return compressed
 
@@ -142,14 +145,17 @@ class VoyageAIRerank(BaseDocumentCompressor):
 
         Returns:
             A sequence of compressed documents in relevance_score order.
+            Each document's metadata includes 'relevance_score' and 'total_tokens'.
         """
         if len(documents) == 0:
             return []
 
+        rerank_result = await self._arerank(documents, query)
         compressed = []
-        for res in (await self._arerank(documents, query)).results:
+        for res in rerank_result.results:
             doc = documents[res.index]
             doc_copy = Document(doc.page_content, metadata=deepcopy(doc.metadata))
             doc_copy.metadata["relevance_score"] = res.relevance_score
+            doc_copy.metadata["total_tokens"] = rerank_result.total_tokens
             compressed.append(doc_copy)
         return compressed

@@ -38,6 +38,10 @@ def test_sync() -> None:
         query="When is the Apple's conference call scheduled?", documents=documents
     )
     assert len(doc_list) == len(result)
+    for doc in result:
+        assert "total_tokens" in doc.metadata
+        assert isinstance(doc.metadata["total_tokens"], int)
+        assert doc.metadata["total_tokens"] > 0
 
 
 async def test_async() -> None:
@@ -66,3 +70,7 @@ async def test_async() -> None:
         query="When is the Apple's conference call scheduled?", documents=documents
     )
     assert len(doc_list) == len(result)
+    for doc in result:
+        assert "total_tokens" in doc.metadata
+        assert isinstance(doc.metadata["total_tokens"], int)
+        assert doc.metadata["total_tokens"] > 0
