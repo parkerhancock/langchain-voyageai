@@ -125,7 +125,7 @@ class VoyageAIRerank(BaseDocumentCompressor):
             doc = documents[res.index]
             doc_copy = Document(doc.page_content, metadata=deepcopy(doc.metadata))
             doc_copy.metadata["relevance_score"] = res.relevance_score
-            doc_copy.metadata["total_tokens"] = rerank_result.usage.total_tokens
+            doc_copy.metadata["total_tokens"] = rerank_result.total_tokens
             compressed.append(doc_copy)
         return compressed
 
@@ -156,6 +156,6 @@ class VoyageAIRerank(BaseDocumentCompressor):
             doc = documents[res.index]
             doc_copy = Document(doc.page_content, metadata=deepcopy(doc.metadata))
             doc_copy.metadata["relevance_score"] = res.relevance_score
-            doc_copy.metadata["total_tokens"] = rerank_result.usage.total_tokens
+            doc_copy.metadata["total_tokens"] = rerank_result.total_tokens
             compressed.append(doc_copy)
         return compressed
