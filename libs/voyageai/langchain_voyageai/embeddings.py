@@ -67,10 +67,10 @@ class VoyageAIEmbeddings(BaseModel, Embeddings):
                 if model in ["voyage-2", "voyage-02"]
                 else (
                     DEFAULT_VOYAGE_3_LITE_BATCH_SIZE
-                    if model == "voyage-3-lite"
+                    if model in ["voyage-3-lite", "voyage-3.5-lite"]
                     else (
                         DEFAULT_VOYAGE_3_BATCH_SIZE
-                        if model == "voyage-3"
+                        if model in ["voyage-3", "voyage-3.5"]
                         else DEFAULT_BATCH_SIZE
                     )
                 )
