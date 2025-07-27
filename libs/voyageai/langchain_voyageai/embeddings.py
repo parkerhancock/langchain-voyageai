@@ -105,7 +105,9 @@ class VoyageAIEmbeddings(BaseModel, Embeddings):
         """Check if the model is a contextualized embedding model."""
         return "context" in self.model
 
-    def _embed_context(self, inputs: List[List[str]], input_type: str) -> List[List[float]]:
+    def _embed_context(
+        self, inputs: List[List[str]], input_type: str
+    ) -> List[List[float]]:
         """Embed using contextualized embedding API."""
         r = self._client.contextualized_embed(
             inputs=inputs,
@@ -113,7 +115,7 @@ class VoyageAIEmbeddings(BaseModel, Embeddings):
             input_type=input_type,
             output_dimension=self.output_dimension,
         ).results
-        return r[0].embeddings
+        return r[0].embeddings  # type: ignore
 
     def _embed_regular(self, texts: List[str], input_type: str) -> List[List[float]]:
         """Embed using regular embedding API."""
@@ -144,7 +146,9 @@ class VoyageAIEmbeddings(BaseModel, Embeddings):
             result = self._embed_regular([text], "query")
         return result[0]
 
-    async def _aembed_context(self, inputs: List[List[str]], input_type: str) -> List[List[float]]:
+    async def _aembed_context(
+        self, inputs: List[List[str]], input_type: str
+    ) -> List[List[float]]:
         """Async embed using contextualized embedding API."""
         r = await self._aclient.contextualized_embed(
             inputs=inputs,
@@ -152,9 +156,11 @@ class VoyageAIEmbeddings(BaseModel, Embeddings):
             input_type=input_type,
             output_dimension=self.output_dimension,
         )
-        return r.results[0].embeddings
+        return r.results[0].embeddings  # type: ignore
 
-    async def _aembed_regular(self, texts: List[str], input_type: str) -> List[List[float]]:
+    async def _aembed_regular(
+        self, texts: List[str], input_type: str
+    ) -> List[List[float]]:
         """Async embed using regular embedding API."""
         embeddings: List[List[float]] = []
         _iter = self._get_batch_iterator(texts)

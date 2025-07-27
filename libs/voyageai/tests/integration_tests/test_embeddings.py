@@ -111,9 +111,12 @@ async def test_langchain_voyageai_async_contextual_embedding_query() -> None:
 def test_langchain_voyageai_contextual_embedding_realistic_documents() -> None:
     """Test contextual voyage embeddings with realistic document context."""
     documents = [
-        "The Mediterranean diet emphasizes fish, olive oil, and vegetables, believed to reduce chronic diseases.",
-        "Photosynthesis in plants converts light energy into glucose and produces essential oxygen.",
-        "Apple's conference call to discuss fourth fiscal quarter results is scheduled for Thursday, November 2, 2023."
+        "The Mediterranean diet emphasizes fish, olive oil, "
+        "and vegetables, believed to reduce chronic diseases.",
+        "Photosynthesis in plants converts light energy into "
+        "glucose and produces essential oxygen.",
+        "Apple's conference call to discuss fourth fiscal quarter "
+        "results is scheduled for Thursday, November 2, 2023.",
     ]
     embedding = VoyageAIEmbeddings(model="voyage-context-3")  # type: ignore[call-arg]
     output = embedding.embed_documents(documents)
