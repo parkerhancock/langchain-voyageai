@@ -113,7 +113,7 @@ class VoyageAIEmbeddings(BaseModel, Embeddings):
             input_type=input_type,
             output_dimension=self.output_dimension,
         ).results
-        return cast(List[List[float]], r[0] if len(inputs) == 1 else r)
+        return r[0].embeddings
 
     def _embed_regular(self, texts: List[str], input_type: str) -> List[List[float]]:
         """Embed using regular embedding API."""
@@ -140,8 +140,8 @@ class VoyageAIEmbeddings(BaseModel, Embeddings):
         """Embed query text."""
         if self._is_context_model():
             result = self._embed_context([[text]], "query")
-            return cast(List[float], result[0])
-        result = self._embed_regular([text], "query")
+        else:
+            result = self._embed_regular([text], "query")
         return result[0]
 
     async def _aembed_context(self, inputs: List[List[str]], input_type: str) -> List[List[float]]:
@@ -152,7 +152,7 @@ class VoyageAIEmbeddings(BaseModel, Embeddings):
             input_type=input_type,
             output_dimension=self.output_dimension,
         )
-        return cast(List[List[float]], r.results[0] if len(inputs) == 1 else r.results)
+        return r.results[0].embeddings
 
     async def _aembed_regular(self, texts: List[str], input_type: str) -> List[List[float]]:
         """Async embed using regular embedding API."""
@@ -179,6 +179,6 @@ class VoyageAIEmbeddings(BaseModel, Embeddings):
         """Async embed query text."""
         if self._is_context_model():
             result = await self._aembed_context([[text]], "query")
-            return cast(List[float], result[0])
-        result = await self._aembed_regular([text], "query")
+        else:
+            result = await self._aembed_regular([text], "query")
         return result[0]
