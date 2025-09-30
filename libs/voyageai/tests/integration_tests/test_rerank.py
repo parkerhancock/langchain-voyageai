@@ -1,10 +1,17 @@
 """Test the voyageai reranker."""
 
 import os
+import pytest
 
 from langchain_core.documents import Document
 
 from langchain_voyageai.rerank import VoyageAIRerank
+
+
+pytestmark = pytest.mark.skipif(
+    "VOYAGE_API_KEY" not in os.environ,
+    reason="VOYAGE_API_KEY environment variable required for Voyage integration tests",
+)
 
 
 def test_voyageai_reranker_init() -> None:

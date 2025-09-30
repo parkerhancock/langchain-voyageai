@@ -1,8 +1,16 @@
 """Test VoyageAI embeddings."""
 
+import os
+import pytest
+
 from langchain_voyageai import VoyageAIEmbeddings
 
 # Please set VOYAGE_API_KEY in the environment variables
+pytestmark = pytest.mark.skipif(
+    "VOYAGE_API_KEY" not in os.environ,
+    reason="VOYAGE_API_KEY environment variable required for Voyage integration tests",
+)
+
 MODEL = "voyage-2"
 
 

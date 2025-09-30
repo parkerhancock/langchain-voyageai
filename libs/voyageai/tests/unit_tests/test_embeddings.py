@@ -1,5 +1,7 @@
 """Test embedding model integration."""
 
+from typing import List
+
 from langchain_core.embeddings import Embeddings
 from pydantic import SecretStr
 
@@ -137,3 +139,74 @@ def test_contextual_model_variants() -> None:
         assert (
             emb._is_context_model() is True
         ), f"Model {model} should be detected as contextual"
+
+
+class _StubResponse:
+    def __init__(self, count: int) -> None:
+        self.embeddings = [[float(i)] for i in range(count)]
+
+
+class _StubClient:
+    def __init__(self, token_lengths: List[int], recorded_batches: List[List[str]]) -> None:
+        self._token_lengths = token_lengths
+        self._recorded_batches = recorded_batches
+
+    def tokenize(self, texts: List[str], model: str) -> List[List[int]]:  # type: ignore[override]
+        assert len(texts) == len(self._token_lengths)
+        return [list(range(length)) for length in self._token_lengths]
+
+    def embed(self, texts: List[str], **_: object) -> _StubResponse:  # type: ignore[override]
+        batch = list(texts)
+        self._recorded_batches.append(batch)
+        return _StubResponse(len(batch))
+
+
+def test_embed_regular_splits_on_token_limit(monkeypatch) -> None:
+    texts = ["text-a", "text-b", "text-c", "text-d"]
+    # voyage-3.5 limit is 320k tokens per request. Force batches of two items each.
+    token_lengths = [150_000, 150_000, 150_000, 150_000]
+    recorded_batches: List[List[str]] = []
+    emb = VoyageAIEmbeddings(
+        voyage_api_key=SecretStr("NOT_A_VALID_KEY"),  # type: ignore
+        model="voyage-3.5",
+        batch_size=10,
+    )
+    stub_client = _StubClient(token_lengths, recorded_batches)
+    monkeypatch.setattr(emb, "_client", stub_client, raising=False)
+
+    result = emb._embed_regular(texts, "document")
+
+    assert recorded_batches == [["text-a", "text-b"], ["text-c", "text-d"]]
+    assert len(result) == len(texts)
+
+
+def test_iter_token_safe_batch_respects_custom_batch_size(monkeypatch) -> None:
+    texts = [f"chunk-{i}" for i in range(5)]
+    token_lengths = [5] * len(texts)
+    recorded_batches: List[List[str]] = []
+    emb = VoyageAIEmbeddings(
+        voyage_api_key=SecretStr("NOT_A_VALID_KEY"),  # type: ignore
+        model="voyage-3.5-lite",
+        batch_size=2,
+    )
+    stub_client = _StubClient(token_lengths, recorded_batches)
+    monkeypatch.setattr(emb, "_client", stub_client, raising=False)
+
+    slices = list(emb._iter_token_safe_batch_slices(texts))
+    assert slices == [(0, 2), (2, 4), (4, 5)]
+
+
+def test_iter_token_safe_batch_handles_single_oversized_text(monkeypatch) -> None:
+    texts = ["oversized"]
+    token_lengths = [500_000]
+    recorded_batches: List[List[str]] = []
+    emb = VoyageAIEmbeddings(
+        voyage_api_key=SecretStr("NOT_A_VALID_KEY"),  # type: ignore
+        model="voyage-3-large",
+        batch_size=5,
+    )
+    stub_client = _StubClient(token_lengths, recorded_batches)
+    monkeypatch.setattr(emb, "_client", stub_client, raising=False)
+
+    slices = list(emb._iter_token_safe_batch_slices(texts))
+    assert slices == [(0, 1)]
