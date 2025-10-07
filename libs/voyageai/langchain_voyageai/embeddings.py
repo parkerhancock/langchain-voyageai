@@ -1,5 +1,5 @@
 import logging
-from typing import Any, Iterable, List, Literal, Optional, cast
+from typing import Any, Iterable, Iterator, List, Literal, Optional, Tuple, cast
 
 import voyageai  # type: ignore
 from langchain_core.embeddings import Embeddings
@@ -20,6 +20,12 @@ DEFAULT_VOYAGE_2_BATCH_SIZE = 72
 DEFAULT_VOYAGE_3_LITE_BATCH_SIZE = 30
 DEFAULT_VOYAGE_3_BATCH_SIZE = 10
 DEFAULT_BATCH_SIZE = 7
+MAX_DOCUMENTS_PER_REQUEST = 1_000
+DEFAULT_MAX_TOKENS_PER_REQUEST = 120_000
+TOKEN_LIMIT_OVERRIDES: Tuple[Tuple[int, Tuple[str, ...]], ...] = (
+    (1_000_000, ("voyage-3.5-lite", "voyage-3-lite")),
+    (320_000, ("voyage-3.5", "voyage-3", "voyage-2", "voyage-02")),
+)
 
 
 class VoyageAIEmbeddings(BaseModel, Embeddings):
@@ -85,21 +91,69 @@ class VoyageAIEmbeddings(BaseModel, Embeddings):
         self._aclient = voyageai.client_async.AsyncClient(api_key=api_key_str)
         return self
 
-    def _get_batch_iterator(self, texts: List[str]) -> Iterable:
-        if self.show_progress_bar:
-            try:
-                from tqdm.auto import tqdm  # type: ignore
-            except ImportError as e:
-                raise ImportError(
-                    "Must have tqdm installed if `show_progress_bar` is set to True. "
-                    "Please install with `pip install tqdm`."
-                ) from e
+    def _max_documents_per_batch(self) -> int:
+        """Return the maximum number of documents allowed in a single request."""
+        return max(1, min(self.batch_size, MAX_DOCUMENTS_PER_REQUEST))
 
-            _iter = tqdm(range(0, len(texts), self.batch_size))
-        else:
-            _iter = range(0, len(texts), self.batch_size)  # type: ignore
+    def _max_tokens_per_batch(self) -> int:
+        """Return the maximum number of tokens allowed for the current model."""
+        model_name = self.model
+        for limit, models in TOKEN_LIMIT_OVERRIDES:
+            if model_name in models:
+                return limit
+        return DEFAULT_MAX_TOKENS_PER_REQUEST
 
-        return _iter
+    def _token_lengths(self, texts: List[str]) -> List[int]:
+        """Return token lengths for texts using the Voyage client tokenizer."""
+        try:
+            tokenized = self._client.tokenize(texts, self.model)
+        except Exception:
+            logger.debug("Failed to tokenize texts for model %s", self.model)
+            raise
+        return [len(tokens) for tokens in tokenized]
+
+    def _iter_token_safe_batch_slices(
+        self, texts: List[str]
+    ) -> Iterator[Tuple[int, int]]:
+        """Yield (start, end) indices for batches within token and length limits."""
+        if not texts:
+            return
+
+        token_lengths = self._token_lengths(texts)
+        max_docs = self._max_documents_per_batch()
+        max_tokens = self._max_tokens_per_batch()
+
+        index = 0
+        total_texts = len(texts)
+        while index < total_texts:
+            start = index
+            batch_tokens = 0
+            batch_docs = 0
+            while index < total_texts and batch_docs < max_docs:
+                current_tokens = token_lengths[index]
+                if batch_docs > 0 and batch_tokens + current_tokens > max_tokens:
+                    break
+
+                if current_tokens > max_tokens and batch_docs == 0:
+                    logger.warning(
+                        "Text at index %s exceeds Voyage token limit (%s > %s). "
+                        "Sending as a single-item batch; API may truncate or error.",
+                        index,
+                        current_tokens,
+                        max_tokens,
+                    )
+                    index += 1
+                    batch_docs += 1
+                    batch_tokens = current_tokens
+                    break
+
+                batch_tokens += current_tokens
+                batch_docs += 1
+                index += 1
+
+            if start == index:
+                index += 1
+            yield (start, index)
 
     def _is_context_model(self) -> bool:
         """Check if the model is a contextualized embedding model."""
@@ -120,16 +174,36 @@ class VoyageAIEmbeddings(BaseModel, Embeddings):
     def _embed_regular(self, texts: List[str], input_type: str) -> List[List[float]]:
         """Embed using regular embedding API."""
         embeddings: List[List[float]] = []
-        _iter = self._get_batch_iterator(texts)
-        for i in _iter:
-            r = self._client.embed(
-                texts[i : i + self.batch_size],
-                model=self.model,
-                input_type=input_type,
-                truncation=self.truncation,
-                output_dimension=self.output_dimension,
-            ).embeddings
-            embeddings.extend(cast(Iterable[List[float]], r))
+        progress = None
+        if self.show_progress_bar:
+            try:
+                from tqdm.auto import tqdm  # type: ignore
+            except ImportError as e:
+                raise ImportError(
+                    "Must have tqdm installed if `show_progress_bar` is set to True. "
+                    "Please install with `pip install tqdm`."
+                ) from e
+
+            progress = tqdm(total=len(texts))
+
+        try:
+            for start, end in self._iter_token_safe_batch_slices(texts):
+                if start == end:
+                    continue
+                batch = texts[start:end]
+                r = self._client.embed(
+                    batch,
+                    model=self.model,
+                    input_type=input_type,
+                    truncation=self.truncation,
+                    output_dimension=self.output_dimension,
+                ).embeddings
+                embeddings.extend(cast(Iterable[List[float]], r))
+                if progress is not None:
+                    progress.update(len(batch))
+        finally:
+            if progress is not None:
+                progress.close()
         return embeddings
 
     def embed_documents(self, texts: List[str]) -> List[List[float]]:
@@ -163,16 +237,36 @@ class VoyageAIEmbeddings(BaseModel, Embeddings):
     ) -> List[List[float]]:
         """Async embed using regular embedding API."""
         embeddings: List[List[float]] = []
-        _iter = self._get_batch_iterator(texts)
-        for i in _iter:
-            r = await self._aclient.embed(
-                texts[i : i + self.batch_size],
-                model=self.model,
-                input_type=input_type,
-                truncation=self.truncation,
-                output_dimension=self.output_dimension,
-            )
-            embeddings.extend(cast(Iterable[List[float]], r.embeddings))
+        progress = None
+        if self.show_progress_bar:
+            try:
+                from tqdm.auto import tqdm  # type: ignore
+            except ImportError as e:
+                raise ImportError(
+                    "Must have tqdm installed if `show_progress_bar` is set to True. "
+                    "Please install with `pip install tqdm`."
+                ) from e
+
+            progress = tqdm(total=len(texts))
+
+        try:
+            for start, end in self._iter_token_safe_batch_slices(texts):
+                if start == end:
+                    continue
+                batch = texts[start:end]
+                r = await self._aclient.embed(
+                    batch,
+                    model=self.model,
+                    input_type=input_type,
+                    truncation=self.truncation,
+                    output_dimension=self.output_dimension,
+                )
+                embeddings.extend(cast(Iterable[List[float]], r.embeddings))
+                if progress is not None:
+                    progress.update(len(batch))
+        finally:
+            if progress is not None:
+                progress.close()
         return embeddings
 
     async def aembed_documents(self, texts: List[str]) -> List[List[float]]:

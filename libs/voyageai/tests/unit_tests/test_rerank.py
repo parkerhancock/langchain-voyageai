@@ -5,6 +5,7 @@ import pytest  # type: ignore
 from langchain_core.documents import Document
 from voyageai.api_resources import VoyageResponse  # type: ignore
 from voyageai.object import RerankingObject  # type: ignore
+import voyageai
 
 from langchain_voyageai.rerank import VoyageAIRerank
 
@@ -47,8 +48,11 @@ def get_mock_rerank_result() -> RerankingObject:
 
 
 @pytest.mark.requires("voyageai")
-def test_rerank_unit_test(mocker: Any) -> None:
-    mocker.patch("voyageai.Client.rerank").return_value = get_mock_rerank_result()
+def test_rerank_unit_test(monkeypatch: pytest.MonkeyPatch) -> None:
+    def _mock_rerank(*_: Any, **__: Any) -> RerankingObject:
+        return get_mock_rerank_result()
+
+    monkeypatch.setattr(voyageai.Client, "rerank", _mock_rerank)
     expected_result = [
         Document(
             page_content="Photosynthesis in plants converts light energy into "
